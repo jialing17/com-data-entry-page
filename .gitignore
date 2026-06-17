@@ -2,5 +2,5 @@ node_modules/
 data/app.db
 *.xlsx
 .DS_Store
-data/app.db-shm
-data/app.db-wal
+data/*.db-shm
+data/*.db-wal
