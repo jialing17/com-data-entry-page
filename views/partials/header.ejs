@@ -5,8 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title><%= typeof title !== 'undefined' ? title + ' - ' : '' %>Data Entry App</title>
   <link rel="stylesheet" href="/style.css">
+  <script src="/sync.js" defer></script>
 </head>
 <body>
+  <div id="offline-status" style="display:none;background:#ff9800;color:#000;padding:10px 14px;text-align:center;font-weight:600;">
+    Offline mode — data will be saved locally and synced when connection returns.
+  </div>
   <nav class="navbar">
     <div class="container nav-inner">
       <a href="/" class="brand"><img src="/logo.png" alt="Logo" class="brand-logo"></a>

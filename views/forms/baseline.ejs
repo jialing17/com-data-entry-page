@@ -8,7 +8,7 @@
 <div class="form-entry-layout">
   <div class="card form-card">
     <h2>New Entry</h2>
-    <form action="/events/<%= event.id %>/forms/baseline" method="POST" class="form" id="baseline-form">
+    <form action="/events/<%= event.id %>/forms/baseline" method="POST" class="form" id="baseline-form" data-offline-sync="baseline_records">
       <div class="form-group">
         <label for="operator_id">Operator (who filled this form)</label>
         <select id="operator_id" name="operator_id" required>
@@ -61,44 +61,43 @@
     <h2>Records (<%= records.length %>)</h2>
     <% if (records.length === 0) { %>
       <p class="text-muted">No records yet.</p>
-    <% } else { %>
-      <div class="table-scroll">
-        <table class="table">
-          <thead>
-            <tr>
-              <th>Subject ID</th>
-              <th>Height</th>
-              <th>Weight</th>
-              <th>BMI</th>
-              <th>Waist</th>
-              <th>Hip</th>
-              <th>Grip</th>
-              <th>Operator</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            <% records.forEach(r => { %>
-              <tr>
-                <td><%= r.subject_id %></td>
-                <td><%= r.height %></td>
-                <td><%= r.weight %></td>
-                <td><%= r.bmi %></td>
-                <td><%= r.waist_circumference %></td>
-                <td><%= r.hip_circumference %></td>
-                <td><%= r.grip_strength %></td>
-                <td><%= r.operator_name %></td>
-                <td>
-                  <form action="/events/<%= event.id %>/records/baseline_records/<%= r.id %>?_method=DELETE" method="POST" onsubmit="return confirm('Delete?')">
-                    <button class="btn btn-sm btn-danger">✕</button>
-                  </form>
-                </td>
-              </tr>
-            <% }) %>
-          </tbody>
-        </table>
-      </div>
     <% } %>
+    <div class="table-scroll" <% if (records.length === 0) { %>style="display:none;"<% } %>>
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Subject ID</th>
+            <th>Height</th>
+            <th>Weight</th>
+            <th>BMI</th>
+            <th>Waist</th>
+            <th>Hip</th>
+            <th>Grip</th>
+            <th>Operator</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <% records.forEach(r => { %>
+            <tr>
+              <td><%= r.subject_id %></td>
+              <td><%= r.height %></td>
+              <td><%= r.weight %></td>
+              <td><%= r.bmi %></td>
+              <td><%= r.waist_circumference %></td>
+              <td><%= r.hip_circumference %></td>
+              <td><%= r.grip_strength %></td>
+              <td><%= r.operator_name %></td>
+              <td>
+                <form action="/events/<%= event.id %>/records/baseline_records/<%= r.id %>?_method=DELETE" method="POST" onsubmit="return confirm('Delete?')" data-delete-sync>
+                  <button class="btn btn-sm btn-danger">✕</button>
+                </form>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
   </div>
 </div>
 

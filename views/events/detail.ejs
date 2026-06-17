@@ -56,116 +56,105 @@
   </div>
 </div>
 
-<% if (baselineRecords.length > 0 || pyrocksRecords.length > 0 || donutechRecords.length > 0 || sgRecords.length > 0) { %>
-  <h2 style="margin-top:2rem">Recent Records</h2>
+<h2 style="margin-top:2rem">Recent Records</h2>
 
-  <% if (baselineRecords.length > 0) { %>
-    <details open>
-      <summary>Baseline (<%= counts.baseline %>)</summary>
-      <table class="table">
-        <thead><tr><th>Subject ID</th><th>Height</th><th>Weight</th><th>BMI</th><th>Waist</th><th>Hip</th><th>Grip</th><th>Operator</th><th></th></tr></thead>
-        <tbody>
-          <% baselineRecords.slice(0, 20).forEach(r => { %>
-            <tr>
-              <td><%= r.subject_id %></td>
-              <td><%= r.height %></td>
-              <td><%= r.weight %></td>
-              <td><%= r.bmi %></td>
-              <td><%= r.waist_circumference %></td>
-              <td><%= r.hip_circumference %></td>
-              <td><%= r.grip_strength %></td>
-              <td><%= r.operator_name %></td>
-              <td>
-                <form action="/events/<%= event.id %>/records/baseline_records/<%= r.id %>?_method=DELETE" method="POST" onsubmit="return confirm('Delete this record?')">
-                  <button class="btn btn-sm btn-danger">✕</button>
-                </form>
-              </td>
-            </tr>
-          <% }) %>
-        </tbody>
-      </table>
-    </details>
-  <% } %>
+<details <% if (baselineRecords.length > 0) { %>open<% } %>>
+  <summary>Baseline (<%= counts.baseline %>)</summary>
+  <table class="table">
+    <thead><tr><th>Subject ID</th><th>Height</th><th>Weight</th><th>BMI</th><th>Waist</th><th>Hip</th><th>Grip</th><th>Operator</th><th></th></tr></thead>
+    <tbody>
+      <% baselineRecords.slice(0, 20).forEach(r => { %>
+        <tr>
+          <td><%= r.subject_id %></td>
+          <td><%= r.height %></td>
+          <td><%= r.weight %></td>
+          <td><%= r.bmi %></td>
+          <td><%= r.waist_circumference %></td>
+          <td><%= r.hip_circumference %></td>
+          <td><%= r.grip_strength %></td>
+          <td><%= r.operator_name %></td>
+          <td>
+            <form action="/events/<%= event.id %>/records/baseline_records/<%= r.id %>?_method=DELETE" method="POST" onsubmit="return confirm('Delete this record?')" data-delete-sync>
+              <button class="btn btn-sm btn-danger">✕</button>
+            </form>
+          </td>
+        </tr>
+      <% }) %>
+    </tbody>
+  </table>
+</details>
 
-  <% if (pyrocksRecords.length > 0) { %>
-    <details>
-      <summary>Pyrocks (<%= counts.pyrocks %>)</summary>
-      <table class="table">
-        <thead><tr><th>Subject ID</th><th>Risk</th><th>Operator</th><th></th></tr></thead>
-        <tbody>
-          <% pyrocksRecords.forEach(r => { %>
-            <tr>
-              <td><%= r.subject_id %></td>
-              <td><%= r.risk %></td>
-              <td><%= r.operator_name %></td>
-              <td>
-                <form action="/events/<%= event.id %>/records/pyrocks_records/<%= r.id %>?_method=DELETE" method="POST" onsubmit="return confirm('Delete?')">
-                  <button class="btn btn-sm btn-danger">✕</button>
-                </form>
-              </td>
-            </tr>
-          <% }) %>
-        </tbody>
-      </table>
-    </details>
-  <% } %>
+<details>
+  <summary>Pyrocks (<%= counts.pyrocks %>)</summary>
+  <table class="table">
+    <thead><tr><th>Subject ID</th><th>Risk</th><th>Operator</th><th></th></tr></thead>
+    <tbody>
+      <% pyrocksRecords.forEach(r => { %>
+        <tr>
+          <td><%= r.subject_id %></td>
+          <td><%= r.risk %></td>
+          <td><%= r.operator_name %></td>
+          <td>
+            <form action="/events/<%= event.id %>/records/pyrocks_records/<%= r.id %>?_method=DELETE" method="POST" onsubmit="return confirm('Delete?')" data-delete-sync>
+              <button class="btn btn-sm btn-danger">✕</button>
+            </form>
+          </td>
+        </tr>
+      <% }) %>
+    </tbody>
+  </table>
+</details>
 
-  <% if (donutechRecords.length > 0) { %>
-    <details>
-      <summary>DonuTech (<%= counts.donutech %>)</summary>
-      <table class="table">
-        <thead><tr><th>Subject ID</th><th>BP</th><th>HR</th><th>Glucose</th><th>Last Meal</th><th>Remarks</th><th>Operator</th><th></th></tr></thead>
-        <tbody>
-          <% donutechRecords.forEach(r => { %>
-            <tr>
-              <td><%= r.subject_id %></td>
-              <td><%= r.blood_pressure %></td>
-              <td><%= r.heart_rate %></td>
-              <td><%= r.blood_glucose %></td>
-              <td><%= r.time_since_last_meal %></td>
-              <td><%= r.remarks %></td>
-              <td><%= r.operator_name %></td>
-              <td>
-                <form action="/events/<%= event.id %>/records/donutech_records/<%= r.id %>?_method=DELETE" method="POST" onsubmit="return confirm('Delete?')">
-                  <button class="btn btn-sm btn-danger">✕</button>
-                </form>
-              </td>
-            </tr>
-          <% }) %>
-        </tbody>
-      </table>
-    </details>
-  <% } %>
+<details>
+  <summary>DonuTech (<%= counts.donutech %>)</summary>
+  <table class="table">
+    <thead><tr><th>Subject ID</th><th>BP</th><th>HR</th><th>Glucose</th><th>Last Meal</th><th>Remarks</th><th>Operator</th><th></th></tr></thead>
+    <tbody>
+      <% donutechRecords.forEach(r => { %>
+        <tr>
+          <td><%= r.subject_id %></td>
+          <td><%= r.blood_pressure %></td>
+          <td><%= r.heart_rate %></td>
+          <td><%= r.blood_glucose %></td>
+          <td><%= r.time_since_last_meal %></td>
+          <td><%= r.remarks %></td>
+          <td><%= r.operator_name %></td>
+          <td>
+            <form action="/events/<%= event.id %>/records/donutech_records/<%= r.id %>?_method=DELETE" method="POST" onsubmit="return confirm('Delete?')" data-delete-sync>
+              <button class="btn btn-sm btn-danger">✕</button>
+            </form>
+          </td>
+        </tr>
+      <% }) %>
+    </tbody>
+  </table>
+</details>
 
-  <% if (sgRecords.length > 0) { %>
-    <details>
-      <summary>SG (<%= counts.sg %>)</summary>
-      <table class="table">
-        <thead><tr><th>S/N</th><th>Subject ID</th><th>HbA1C</th><th>Chol</th><th>HDL</th><th>TRIG</th><th>LDL</th><th>Gluc(DT)</th><th>Operator</th><th></th></tr></thead>
-        <tbody>
-          <% sgRecords.slice(0, 20).forEach(r => { %>
-            <tr>
-              <td><%= r.serial_number %></td>
-              <td><%= r.subject_id %></td>
-              <td><%= r.hba1c %></td>
-              <td><%= r.total_cholesterol %></td>
-              <td><%= r.hdl %></td>
-              <td><%= r.trig %></td>
-              <td><%= r.ldl %></td>
-              <td><%= r.glucose_donutech %></td>
-              <td><%= r.operator_name %></td>
-              <td>
-                <form action="/events/<%= event.id %>/records/sg_records/<%= r.id %>?_method=DELETE" method="POST" onsubmit="return confirm('Delete?')">
-                  <button class="btn btn-sm btn-danger">✕</button>
-                </form>
-              </td>
-            </tr>
-          <% }) %>
-        </tbody>
-      </table>
-    </details>
-  <% } %>
-<% } %>
+<details>
+  <summary>SG (<%= counts.sg %>)</summary>
+  <table class="table">
+    <thead><tr><th>S/N</th><th>Subject ID</th><th>HbA1C</th><th>Chol</th><th>HDL</th><th>TRIG</th><th>LDL</th><th>Gluc(DT)</th><th>Operator</th><th></th></tr></thead>
+    <tbody>
+      <% sgRecords.slice(0, 20).forEach(r => { %>
+        <tr>
+          <td><%= r.serial_number %></td>
+          <td><%= r.subject_id %></td>
+          <td><%= r.hba1c %></td>
+          <td><%= r.total_cholesterol %></td>
+          <td><%= r.hdl %></td>
+          <td><%= r.trig %></td>
+          <td><%= r.ldl %></td>
+          <td><%= r.glucose_donutech %></td>
+          <td><%= r.operator_name %></td>
+          <td>
+            <form action="/events/<%= event.id %>/records/sg_records/<%= r.id %>?_method=DELETE" method="POST" onsubmit="return confirm('Delete?')" data-delete-sync>
+              <button class="btn btn-sm btn-danger">✕</button>
+            </form>
+          </td>
+        </tr>
+      <% }) %>
+    </tbody>
+  </table>
+</details>
 </main>
 </body>
-</html>

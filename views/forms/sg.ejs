@@ -8,7 +8,7 @@
 <div class="form-entry-layout">
   <div class="card form-card">
     <h2>New Entry</h2>
-    <form action="/events/<%= event.id %>/forms/sg" method="POST" class="form">
+    <form action="/events/<%= event.id %>/forms/sg" method="POST" class="form" data-offline-sync="sg_records">
       <div class="form-group">
         <label for="operator_id">Operator (who filled this form)</label>
         <select id="operator_id" name="operator_id" required>
@@ -92,46 +92,45 @@
     <h2>Records (<%= records.length %>)</h2>
     <% if (records.length === 0) { %>
       <p class="text-muted">No records yet.</p>
-    <% } else { %>
-      <div class="table-scroll">
-        <table class="table">
-          <thead>
-            <tr>
-              <th>S/N</th>
-              <th>Subject ID</th>
-              <th>HbA1C</th>
-              <th>Chol</th>
-              <th>HDL</th>
-              <th>TRIG</th>
-              <th>LDL</th>
-              <th>Gluc(DT)</th>
-              <th>Operator</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            <% records.forEach(r => { %>
-              <tr>
-                <td><%= r.serial_number %></td>
-                <td><%= r.subject_id %></td>
-                <td><%= r.hba1c %></td>
-                <td><%= r.total_cholesterol %></td>
-                <td><%= r.hdl %></td>
-                <td><%= r.trig %></td>
-                <td><%= r.ldl %></td>
-                <td><%= r.glucose_donutech %></td>
-                <td><%= r.operator_name %></td>
-                <td>
-                  <form action="/events/<%= event.id %>/records/sg_records/<%= r.id %>?_method=DELETE" method="POST" onsubmit="return confirm('Delete?')">
-                    <button class="btn btn-sm btn-danger">✕</button>
-                  </form>
-                </td>
-              </tr>
-            <% }) %>
-          </tbody>
-        </table>
-      </div>
     <% } %>
+    <div class="table-scroll" <% if (records.length === 0) { %>style="display:none;"<% } %>>
+      <table class="table">
+        <thead>
+          <tr>
+            <th>S/N</th>
+            <th>Subject ID</th>
+            <th>HbA1C</th>
+            <th>Chol</th>
+            <th>HDL</th>
+            <th>TRIG</th>
+            <th>LDL</th>
+            <th>Gluc(DT)</th>
+            <th>Operator</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <% records.forEach(r => { %>
+            <tr>
+              <td><%= r.serial_number %></td>
+              <td><%= r.subject_id %></td>
+              <td><%= r.hba1c %></td>
+              <td><%= r.total_cholesterol %></td>
+              <td><%= r.hdl %></td>
+              <td><%= r.trig %></td>
+              <td><%= r.ldl %></td>
+              <td><%= r.glucose_donutech %></td>
+              <td><%= r.operator_name %></td>
+              <td>
+                <form action="/events/<%= event.id %>/records/sg_records/<%= r.id %>?_method=DELETE" method="POST" onsubmit="return confirm('Delete?')" data-delete-sync>
+                  <button class="btn btn-sm btn-danger">✕</button>
+                </form>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
   </div>
 </div>
 </main>

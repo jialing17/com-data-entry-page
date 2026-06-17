@@ -9,9 +9,10 @@
   },
   "dependencies": {
     "better-sqlite3": "^11.0.0",
+    "docx": "^9.7.1",
     "ejs": "^3.1.10",
-    "express": "^4.21.0",
     "exceljs": "^4.4.0",
+    "express": "^4.21.0",
     "method-override": "^3.0.0"
   }
 }
