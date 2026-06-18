@@ -5,7 +5,7 @@
 <div class="operator-layout">
   <div class="card">
     <h2>Add Operator</h2>
-    <form action="/operators" method="POST" class="form">
+    <form action="/operators" method="POST" class="form" data-offline-sync="operators">
       <div class="form-group">
         <label for="name">Operator Name</label>
         <input type="text" id="name" name="name" required>
@@ -28,7 +28,8 @@
     <h2>Operator List</h2>
     <% if (operators.length === 0) { %>
       <p class="text-muted">No operators yet.</p>
-    <% } else { %>
+    <% } %>
+    <div class="table-scroll" <% if (operators.length === 0) { %>style="display:none;"<% } %>>
       <table class="table">
         <thead>
           <tr>
@@ -43,15 +44,19 @@
               <td><%= op.name %></td>
               <td><span class="badge badge-<%= op.project %>"><%= op.project %></span></td>
               <td>
-                <form action="/operators/<%= op.id %>?_method=DELETE" method="POST" style="display:inline" onsubmit="return confirm('Delete operator?')">
-                  <button class="btn btn-sm btn-danger">Delete</button>
-                </form>
+                <% if (operatorsWithRecords.includes(op.id)) { %>
+                  <button class="btn btn-sm btn-danger" disabled title="Cannot delete: operator has associated records">Delete</button>
+                <% } else { %>
+                  <form action="/operators/<%= op.id %>?_method=DELETE" method="POST" style="display:inline" onsubmit="return confirm('Delete operator?')" data-delete-sync>
+                    <button class="btn btn-sm btn-danger">Delete</button>
+                  </form>
+                <% } %>
               </td>
             </tr>
           <% }) %>
         </tbody>
       </table>
-    <% } %>
+    </div>
   </div>
 </div>
 </main>

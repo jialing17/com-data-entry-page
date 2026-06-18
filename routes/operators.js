@@ -6,7 +6,21 @@ const { db } = require('../db');
 router.get('/', (req, res) => {
   const operators = db.prepare('SELECT * FROM operators ORDER BY project, name').all();
   const events = db.prepare('SELECT id, name FROM events ORDER BY created_at DESC').all();
-  res.render('operators/manage', { operators, events });
+  
+  // Check which operators have associated records
+  const operatorsWithRecords = db.prepare(`
+    SELECT DISTINCT operator_id FROM (
+      SELECT operator_id FROM baseline_records
+      UNION ALL
+      SELECT operator_id FROM pyrocks_records
+      UNION ALL
+      SELECT operator_id FROM donutech_records
+      UNION ALL
+      SELECT operator_id FROM sg_records
+    )
+  `).all().map(r => r.operator_id);
+  
+  res.render('operators/manage', { operators, events, operatorsWithRecords });
 });
 
 // Create operator

@@ -36,11 +36,11 @@ class OfflineSync {
     // makes pending creates/deletes visible even when navigating between pages
     await this.renderPendingFromIndexedDB();
 
-    // sync when online
+    // sync whenever online
     if (this.isOnline) {
-      const synced = await this.syncPending();
-      // If synced something, refresh page so to show fresh data
-      if (synced && navigator.serviceWorker && navigator.serviceWorker.controller) {
+      const syncResult = await this.syncPending();
+      // If data was synced, refresh page cache for fresh data
+      if ((syncResult === 'SYNCED' || syncResult === 'PARTIAL') && navigator.serviceWorker && navigator.serviceWorker.controller) {
         navigator.serviceWorker.controller.postMessage({ type: 'REFRESH_PAGE_CACHE' });
       }
     }
@@ -55,22 +55,38 @@ class OfflineSync {
     if (operations.length === 0) return;
 
     const currentEventId = this.getCurrentEventId();
-    if (!currentEventId) return;
-
+    const isOperatorsPage = window.location.pathname === '/operators';
     const isFormPage = document.querySelector('.form-card') !== null;
     const isDetailPage = document.querySelector('.form-cards') !== null;
 
+    if (!isOperatorsPage && !currentEventId) return;
+
     for (const op of operations) {
-      // Only render operations that belong to the current event page
-      const opEventId = op.data ? parseInt(op.data.event_id) : null;
-      if (opEventId !== currentEventId) {
+      // For event pages — only render operations that belong to the current event
+      if (op.table !== 'operators' && currentEventId) {
+        const opEventId = op.data ? parseInt(op.data.event_id) : null;
+        if (opEventId !== currentEventId) {
+          continue;
+        }
+      }
+
+      // Skip non-operator operations on the operators page
+      if (isOperatorsPage && op.table !== 'operators') {
+        continue;
+      }
+
+      // Skip operator operations on non-operators pages
+      if (!isOperatorsPage && op.table === 'operators') {
         continue;
       }
 
       if (op.operation === 'CREATE') {
-        if (isFormPage) {
-          // On form pages — only render if the table matches the current form type
-          // The current form page's table is known from data-offline-sync on the form
+        // Handle operator creation on operators page
+        // why not use isoperatorspage? because operators page is not tied to an event, so we want to show all pending operators regardless of event
+        if (op.table === 'operators') {
+          this.addPendingOperatorToTable(op.data);
+        } 
+        else if (isFormPage) {
           const currentFormTable = document.querySelector('form[data-offline-sync]')?.dataset?.offlineSync;
           if (currentFormTable && op.table !== currentFormTable) {
             continue;
@@ -203,20 +219,39 @@ class OfflineSync {
   async markAsSynced(ids) {
     if (!this.db) return;
 
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       const transaction = this.db.transaction([this.storeName], 'readwrite');
       const store = transaction.objectStore(this.storeName);
+      let completed = 0;
+      const total = ids.length;
+
+      if (total === 0) {
+        resolve();
+        return;
+      }
 
       ids.forEach(id => {
         const request = store.get(id);
         request.onsuccess = () => {
           const record = request.result;
-          record.synced = true;
-          store.put(record);
+          if (record) {
+            record.synced = true;
+            store.put(record);
+          }
+          completed++;
+          if (completed === total) {
+            resolve();
+          }
+        };
+        request.onerror = () => {
+          completed++;
+          if (completed === total) {
+            resolve();
+          }
         };
       });
 
-      resolve();
+      transaction.onerror = () => reject(transaction.error);
     });
   }
 
@@ -224,7 +259,7 @@ class OfflineSync {
     const pending = await this.getPendingOperations();
     if (pending.length === 0) {
       console.log('No pending operations to sync');
-      return 'NO_DATA'; 
+      return { status: 'NO_DATA' };
     }
 
     try {
@@ -236,17 +271,45 @@ class OfflineSync {
 
       if (response.ok) {
         const result = await response.json();
-        const syncedIds = pending.map(op => op.id);
-        await this.markAsSynced(syncedIds);
+        
+        // Only mark operations that the server confirmed as successful
+        if (result.results && Array.isArray(result.results)) {
+          const successfulIds = result.results
+            .filter(r => r.success)
+            .map(r => r.id);
+          
+          if (successfulIds.length > 0) {
+            await this.markAsSynced(successfulIds);
+            console.log(`Marked ${successfulIds.length} operations as synced`);
+          }
+          
+          const failedResults = result.results.filter(r => !r.success);
+          
+          if (failedResults.length > 0) {
+            console.warn(`${failedResults.length} operations failed to sync:`, failedResults);
+            return { 
+              status: 'PARTIAL', 
+              synced: result.synced, 
+              failed: result.failed,
+              failures: failedResults 
+            };
+          }
+        } else {
+          // Fallback for old server response format
+          const syncedIds = pending.map(op => op.id);
+          await this.markAsSynced(syncedIds);
+        }
+        
         console.log(`Synced ${result.synced} operations to server`);
-        return 'SYNCED';
+        return { status: 'SYNCED' };
       } else {
-        console.error('Sync failed:', response.status);
-        return 'FAILED';
+        const errorText = await response.text().catch(() => 'Unknown server error');
+        console.error('Sync failed:', response.status, errorText);
+        return { status: 'FAILED', message: `Server error (${response.status}): ${errorText}` };
       }
     } catch (err) {
       console.error('Sync error:', err);
-      return 'FAILED';
+      return { status: 'FAILED', message: err.message || 'Network connection error' };
     }
   }
 
@@ -261,15 +324,17 @@ class OfflineSync {
       navigator.serviceWorker.controller.postMessage({ type: 'REFRESH_PAGE_CACHE' });
     }
 
-    // Capture the specific text status
     const syncResult = await this.syncPending();
     
-    switch (syncResult) {
+    switch (syncResult.status) {
       case 'SYNCED':
         this.showNotification('Data synced successfully. Refreshing page...', 'success');
-        setTimeout(() => {
-          window.location.reload();
-        }, 1500);
+        setTimeout(() => { window.location.reload(); }, 1500);
+        break;
+        
+      case 'PARTIAL':
+        this.showNotification(`Synced ${syncResult.synced} items, ${syncResult.failed} failed. Failed items will retry automatically.`, 'warning');
+        // Failed operations remain in IndexedDB and will be retried on next sync
         break;
         
       case 'NO_DATA':
@@ -277,9 +342,7 @@ class OfflineSync {
         break;
         
       case 'FAILED':
-        this.showNotification(
-        'Sync failed. Connection might be unstable.', 'error'
-      );
+        this.showNotification(`Sync failed: ${syncResult.message}`, 'error');
         break;
     }
   }
@@ -364,12 +427,48 @@ class OfflineSync {
   }
 
   addPendingRecordToUI(table, data, operatorName) {
+    // Handle operators page separately
+    if (table === 'operators') {
+      this.addPendingOperatorToTable(data);
+      return;
+    }
+
     const tableElement = document.querySelector('.table');
     
     if (tableElement) {
       this.addPendingRecordToTable(table, data, operatorName);
     } else {
       this.addPendingRecordToEventDetail(table, data, operatorName);
+    }
+  }
+
+  addPendingOperatorToTable(data) {
+    const tableElement = document.querySelector('.table');
+    if (!tableElement) return;
+    
+    const tbody = tableElement.querySelector('tbody');
+    if (!tbody) return;
+    
+    const rowHtml = `
+      <tr class="pending-record" style="opacity: 0.7; background-color: #fff3cd;">
+        <td>${data.name}</td>
+        <td><span class="badge badge-${data.project}">${data.project}</span></td>
+        <td><span style="color: #856404;">Syncing...</span></td>
+      </tr>
+    `;
+    
+    tbody.insertAdjacentHTML('afterbegin', rowHtml);
+    
+    // Show the table-scroll div if it was hidden (0 operators case)
+    const tableScroll = document.querySelector('.table-scroll');
+    if (tableScroll) {
+      tableScroll.style.display = '';
+    }
+    
+    // Remove "No operators yet" message
+    const noOpsMessage = document.querySelector('.card .text-muted');
+    if (noOpsMessage && noOpsMessage.textContent === 'No operators yet.') {
+      noOpsMessage.remove();
     }
   }
 
@@ -690,6 +789,31 @@ class OfflineSync {
         if (!this.isOnline) {
           e.preventDefault();
           
+          // Check for operator delete: /operators/:id
+          const operatorMatch = form.action.match(/\/operators\/(\d+)/);
+          if (operatorMatch) {
+            const operatorId = operatorMatch[1];
+            
+            console.log('Queueing operator delete:', { operatorId });
+
+            const saved = await this.saveOperation('DELETE', 'operators', {}, operatorId);
+            
+            if (saved) {
+              this.showNotification('✓ Delete queued. Will sync when online', 'warning');
+              
+              const row = form.closest('tr');
+              if (row) {
+                row.style.opacity = '0.4';
+                row.style.textDecoration = 'line-through';
+                row.style.backgroundColor = '#fff3cd';
+              }
+            } else {
+              this.showNotification('✗ Failed to queue delete. Please try again', 'error');
+            }
+            return;
+          }
+          
+          // Check for record delete: /events/:eventId/records/:table/:recordId
           const actionMatch = form.action.match(/\/events\/(\d+)\/records\/([^/]+)\/(\d+)/);
           if (actionMatch) {
             const [, eventId, table, recordId] = actionMatch;

@@ -43,129 +43,134 @@ app.post('/api/sync', (req, res) => {
     return res.status(400).json({ error: 'Invalid operations format' });
   }
 
-  let synced = 0;
-  let skipped = 0;
-  let processedCreated = 0;
-  let processedDeletes = 0;
+  const results = [];
   
   try {
     operations.forEach(op => {
-      const { operation, table, data, recordId } = op;
+      const { id, operation, table, data, recordId } = op;
       
       if (!table) {
-        skipped++;
+        results.push({ id, success: false, error: 'Missing table' });
         return;
       }
 
-      // Handle different operation types
-      if (operation === 'DELETE') {
-        if (!recordId) {
-          console.warn(`Skipping DELETE operation without recordId for table ${table}`);
-          skipped++;
-          return;
-        }
-        
-        const allowedTables = ['baseline_records', 'pyrocks_records', 'donutech_records', 'sg_records'];
-        if (!allowedTables.includes(table)) {
-          console.warn(`Skipping DELETE for invalid table ${table}`);
-          skipped++;
-          return;
-        }
-        
-        db.prepare(`DELETE FROM ${table} WHERE id = ?`).run(recordId);
-        processedDeletes++;
-        synced++;
-      } 
-
-      else if (operation === 'CREATE') {
-        if (!data) {
-          skipped++;
-          return;
+      try {
+        // Handle different operation types
+        if (operation === 'DELETE') {
+          if (!recordId) {
+            results.push({ id, success: false, error: 'Missing recordId for DELETE' });
+            return;
+          }
+          
+          const allowedTables = ['baseline_records', 'pyrocks_records', 'donutech_records', 'sg_records', 'operators'];
+          if (!allowedTables.includes(table)) {
+            results.push({ id, success: false, error: `Invalid table ${table}` });
+            return;
+          }
+          
+          db.prepare(`DELETE FROM ${table} WHERE id = ?`).run(recordId);
+          results.push({ id, success: true });
         }
 
-        // Validate required fields
-        if (!data.event_id || !data.operator_id || !data.subject_id) {
-          console.warn(`Skipping incomplete record for table ${table}:`, data);
-          skipped++;
-          return;
-        }
+        else if (operation === 'CREATE') {
+          if (!data) {
+            results.push({ id, success: false, error: 'Missing data for CREATE' });
+            return;
+          }
 
-        // Insert based on table name
-        if (table === 'baseline_records') {
-          if (!data.height || !data.weight || !data.waist_circumference || !data.hip_circumference || !data.grip_strength) {
-            skipped++;
+          // Handle operator creation (different field requirements)
+          if (table === 'operators') {
+            if (!data.name || !data.project) {
+              results.push({ id, success: false, error: 'Incomplete operator data' });
+              return;
+            }
+            db.prepare('INSERT INTO operators (name, project) VALUES (?, ?)').run(data.name, data.project);
+            results.push({ id, success: true });
             return;
           }
-          db.prepare(`
-            INSERT INTO baseline_records
-            (event_id, operator_id, subject_id, height, weight, waist_circumference, hip_circumference, grip_strength)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-          `).run(
-            data.event_id, data.operator_id, data.subject_id,
-            data.height, data.weight, data.waist_circumference, data.hip_circumference, data.grip_strength
-          );
-          synced++;
-          processedCreated++;
+
+          // skip if essential fields are missing for records
+          if (!data.event_id || !data.operator_id || !data.subject_id) {
+            results.push({ id, success: false, error: 'Missing essential fields' });
+            return;
+          }
+
+          // Insert based on table name
+          if (table === 'baseline_records') {
+            if (!data.height || !data.weight || !data.waist_circumference || !data.hip_circumference || !data.grip_strength) {
+              results.push({ id, success: false, error: 'Missing baseline fields' });
+              return;
+            }
+            db.prepare(`
+              INSERT INTO baseline_records
+              (event_id, operator_id, subject_id, height, weight, waist_circumference, hip_circumference, grip_strength)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            `).run(
+              data.event_id, data.operator_id, data.subject_id,
+              data.height, data.weight, data.waist_circumference, data.hip_circumference, data.grip_strength
+            );
+            results.push({ id, success: true });
+          } 
+          else if (table === 'pyrocks_records') {
+            if (!data.risk) {
+              results.push({ id, success: false, error: 'Missing risk field' });
+              return;
+            }
+            db.prepare(`
+              INSERT INTO pyrocks_records (event_id, operator_id, subject_id, risk)
+              VALUES (?, ?, ?, ?)
+            `).run(data.event_id, data.operator_id, data.subject_id, data.risk);
+            results.push({ id, success: true });
+          } 
+          else if (table === 'donutech_records') {
+            if (!data.blood_pressure || !data.heart_rate || !data.blood_glucose || !data.time_since_last_meal) {
+              results.push({ id, success: false, error: 'Missing donutech fields' });
+              return;
+            }
+            db.prepare(`
+              INSERT INTO donutech_records
+              (event_id, operator_id, subject_id, blood_pressure, heart_rate, blood_glucose, time_since_last_meal, remarks)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            `).run(
+              data.event_id, data.operator_id, data.subject_id,
+              data.blood_pressure, data.heart_rate, data.blood_glucose, data.time_since_last_meal, data.remarks || ''
+            );
+            results.push({ id, success: true });
+          } 
+          else if (table === 'sg_records') {
+            if (!data.serial_number || !data.hba1c || !data.total_cholesterol || !data.hdl || !data.trig || !data.ldl || !data.glucose_donutech || !data.hba1c_equip_no || !data.cholesterol_equip_no) {
+              results.push({ id, success: false, error: 'Missing sg fields' });
+              return;
+            }
+            db.prepare(`
+              INSERT INTO sg_records
+              (event_id, operator_id, serial_number, subject_id, hba1c, total_cholesterol, hdl, trig, ldl, glucose_donutech, hba1c_equip_no, cholesterol_equip_no, remarks)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `).run(
+              data.event_id, data.operator_id, data.serial_number, data.subject_id,
+              data.hba1c, data.total_cholesterol, data.hdl, data.trig, data.ldl, data.glucose_donutech,
+              data.hba1c_equip_no, data.cholesterol_equip_no, data.remarks || ''
+            );
+            results.push({ id, success: true });
+          }
+          else {
+            results.push({ id, success: false, error: `Unknown table ${table}` });
+          }
         } 
-        else if (table === 'pyrocks_records') {
-          if (!data.risk) {
-            skipped++;
-            return;
-          }
-          db.prepare(`
-            INSERT INTO pyrocks_records (event_id, operator_id, subject_id, risk)
-            VALUES (?, ?, ?, ?)
-          `).run(data.event_id, data.operator_id, data.subject_id, data.risk);
-          synced++;
-          processedCreated++;
-        } 
-        else if (table === 'donutech_records') {
-          if (!data.blood_pressure || !data.heart_rate || !data.blood_glucose || !data.time_since_last_meal) {
-            skipped++;
-            return;
-          }
-          db.prepare(`
-            INSERT INTO donutech_records
-            (event_id, operator_id, subject_id, blood_pressure, heart_rate, blood_glucose, time_since_last_meal, remarks)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-          `).run(
-            data.event_id, data.operator_id, data.subject_id,
-            data.blood_pressure, data.heart_rate, data.blood_glucose, data.time_since_last_meal, data.remarks || ''
-          );
-          synced++;
-          processedCreated++;
-        } 
-        else if (table === 'sg_records') {
-          if (!data.serial_number || !data.hba1c || !data.total_cholesterol || !data.hdl || !data.trig || !data.ldl || !data.glucose_donutech || !data.hba1c_equip_no || !data.cholesterol_equip_no) {
-            skipped++;
-            return;
-          }
-          db.prepare(`
-            INSERT INTO sg_records
-            (event_id, operator_id, serial_number, subject_id, hba1c, total_cholesterol, hdl, trig, ldl, glucose_donutech, hba1c_equip_no, cholesterol_equip_no, remarks)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-          `).run(
-            data.event_id, data.operator_id, data.serial_number, data.subject_id,
-            data.hba1c, data.total_cholesterol, data.hdl, data.trig, data.ldl, data.glucose_donutech,
-            data.hba1c_equip_no, data.cholesterol_equip_no, data.remarks || ''
-          );
-          synced++;
-          processedCreated++;
-        }
+
         else {
-          console.warn(`Skipping create for unknown table ${table}`);
-          skipped++;
+          results.push({ id, success: false, error: `Unknown operation type: ${operation}` });
         }
-      } 
-
-      else {
-        console.warn(`Unknown operation type: ${operation}`);
-        skipped++;
+      } catch (opErr) {
+        console.error(`Error processing operation ${id}:`, opErr);
+        results.push({ id, success: false, error: opErr.message });
       }
     });
 
-    console.log(`Synced ${synced} operations (${skipped} skipped): ${processedCreated} creates, ${processedDeletes} deletes`);
-    res.json({ synced, skipped, processedDeletes, processedCreated });
+    const synced = results.filter(r => r.success).length;
+    const failed = results.filter(r => !r.success).length;
+    console.log(`Sync complete: ${synced} succeeded, ${failed} failed`);
+    res.json({ results, synced, failed });
   } catch (err) {
     console.error('Sync error:', err);
     res.status(500).json({ error: err.message });

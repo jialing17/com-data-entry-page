@@ -48,7 +48,7 @@ a:hover { text-decoration: underline; }
   transition: all 0.15s;
   text-decoration: none !important;
 }
-.btn:hover { background: #e8e8e8; }
+.btn:not(:disabled):hover { background: #e8e8e8; }
 .btn-primary { background: #4361ee; color: #fff; border-color: #4361ee; }
 .btn-primary:hover { background: #3a56d4; }
 .btn-success { background: #2ec4b6; color: #fff; border-color: #2ec4b6; }
@@ -56,9 +56,21 @@ a:hover { text-decoration: underline; }
 .btn-warning { background: #f6a623; color: #fff; border-color: #f6a623; }
 .btn-warning:hover { background: #d9921e; }
 .btn-danger { background: #e63946; color: #fff; border-color: #e63946; }
-.btn-danger:hover { background: #c5303c; }
+.btn-danger:not(:disabled):hover { background: #c5303c; }
 .btn-sm { padding: 0.3rem 0.6rem; font-size: 0.8rem; }
 .btn-block { display: block; width: 100%; }
+.btn:disabled,
+.btn-danger:disabled {
+  background: #ccc !important;
+  color: #666 !important;
+  border-color: #bbb !important;
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+.btn:disabled:hover,
+.btn-danger:disabled:hover {
+  background: #ccc !important;
+}
 
 /* ─── Cards ─────────────────────────────────────────── */
 .card {
