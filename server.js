@@ -38,6 +38,16 @@ app.get('/api/events-list', (req, res) => {
 
 // API endpoint to sync offline operations from IndexedDB to server
 app.post('/api/sync', (req, res) => {
+  // test snc fail
+  // return res.json({
+  //   status: 'PARTIAL', // or let your layout naturally return results
+  //   results: [
+  //     { id: 1, success: false, error: 'FOREIGN_KEY_CONSTRAINT', message: 'Fake constraint error for testing' }
+  //   ],
+  //   synced: 0,
+  //   failed: 1
+  // });
+  
   const { operations } = req.body;
   if (!operations || !Array.isArray(operations)) {
     return res.status(400).json({ error: 'Invalid operations format' });

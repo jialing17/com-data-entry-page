@@ -10,11 +10,14 @@ class OfflineSync {
 
   async init() {
     this.db = await this.openDB();
-    
+    window.db = this.db; 
+
+    this.isOnline = navigator.onLine;
+
     window.addEventListener('online', () => this.handleOnline());
     window.addEventListener('offline', () => this.handleOffline());
 
-    // Listen if BACK_ONLINE
+    // Listen if BACK_ONLINE from Service Worker
     if (navigator.serviceWorker) {
       navigator.serviceWorker.addEventListener('message', (event) => {
         if (event.data && event.data.type === 'BACK_ONLINE') {
@@ -27,21 +30,29 @@ class OfflineSync {
       });
     }
 
-    // Show initial offline status
     const statusDiv = document.getElementById('offline-status');
     if (!this.isOnline && statusDiv) {
       statusDiv.style.display = 'block';
     }
 
-    // makes pending creates/deletes visible even when navigating between pages
     await this.renderPendingFromIndexedDB();
 
-    // sync whenever online
     if (this.isOnline) {
       const syncResult = await this.syncPending();
-      // If data was synced, refresh page cache for fresh data
-      if ((syncResult === 'SYNCED' || syncResult === 'PARTIAL') && navigator.serviceWorker && navigator.serviceWorker.controller) {
-        navigator.serviceWorker.controller.postMessage({ type: 'REFRESH_PAGE_CACHE' });
+      if (syncResult && (syncResult.status === 'SYNCED' || syncResult.status === 'PARTIAL')) {
+        
+        // Show notifications on load if tasks get settled automatically
+        if (syncResult.status === 'SYNCED') {
+          this.showNotification('Data synced successfully. Refreshing page...', 'success');
+          setTimeout(() => { window.location.reload(); }, 1500);
+        } else if (syncResult.status === 'PARTIAL') {
+          this.showNotification(`Synced ${syncResult.synced} items. ${syncResult.failed} failed due to conflicts.`, 'warning');
+          setTimeout(() => { window.location.reload(); }, 3000);
+        }
+
+        if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+          navigator.serviceWorker.controller.postMessage({ type: 'REFRESH_PAGE_CACHE' });
+        }
       }
     }
 
@@ -235,13 +246,11 @@ class OfflineSync {
         request.onsuccess = () => {
           const record = request.result;
           if (record) {
-            record.synced = true;
-            store.put(record);
+            // remove it from the store 
+            store.delete(id); 
           }
           completed++;
-          if (completed === total) {
-            resolve();
-          }
+          if (completed === total) resolve();
         };
         request.onerror = () => {
           completed++;
@@ -285,16 +294,30 @@ class OfflineSync {
           
           const failedResults = result.results.filter(r => !r.success);
           
-          if (failedResults.length > 0) {
-            console.warn(`${failedResults.length} operations failed to sync:`, failedResults);
-            return { 
-              status: 'PARTIAL', 
-              synced: result.synced, 
-              failed: result.failed,
-              failures: failedResults 
+
+            if (failedResults.length > 0) {
+              const tx = db.transaction('pending_sync_operations', 'readwrite');
+              const store = tx.objectStore('pending_sync_operations');
+              
+              for (const fail of failedResults) {
+                const record = await store.get(fail.id);
+                if (record) {
+                  record.syncError = fail.message || fail.error || 'Sync failed';
+                  await store.put(record);
+                }
+              }
+              await tx.done;
+
+              console.warn(`${failedResults.length} operations failed to sync:`, failedResults);
+              return { 
+                status: 'PARTIAL', 
+                synced: result.synced, 
+                failed: result.failed,
+                failures: failedResults 
             };
           }
-        } else {
+        } 
+        else {
           // Fallback for old server response format
           const syncedIds = pending.map(op => op.id);
           await this.markAsSynced(syncedIds);
@@ -331,10 +354,14 @@ class OfflineSync {
         this.showNotification('Data synced successfully. Refreshing page...', 'success');
         setTimeout(() => { window.location.reload(); }, 1500);
         break;
-        
+      
       case 'PARTIAL':
-        this.showNotification(`Synced ${syncResult.synced} items, ${syncResult.failed} failed. Failed items will retry automatically.`, 'warning');
-        // Failed operations remain in IndexedDB and will be retried on next sync
+        this.showNotification(
+          `Synced ${syncResult.synced} items. ${syncResult.failed} failed due to conflicts. Page will refresh to update status...`, 
+          'warning'
+        );
+        // refresh after 3s
+        setTimeout(() => { window.location.reload(); }, 3000);
         break;
         
       case 'NO_DATA':
