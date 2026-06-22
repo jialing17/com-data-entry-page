@@ -36,18 +36,27 @@ class OfflineSync {
     }
 
     await this.renderPendingFromIndexedDB();
-
+    
+    // Runs on page load or refresh (i.e. "already online")
     if (this.isOnline) {
       const syncResult = await this.syncPending();
-      if (syncResult && (syncResult.status === 'SYNCED' || syncResult.status === 'PARTIAL')) {
+      if (syncResult && (syncResult.status === 'SYNCED' || syncResult.status === 'PARTIAL' || syncResult.status === 'FAILED')) {
         
         // Show notifications on load if tasks get settled automatically
         if (syncResult.status === 'SYNCED') {
           this.showNotification('Data synced successfully. Refreshing page...', 'success');
           setTimeout(() => { window.location.reload(); }, 1500);
         } else if (syncResult.status === 'PARTIAL') {
-          this.showNotification(`Synced ${syncResult.synced} items. ${syncResult.failed} failed due to conflicts.`, 'warning');
-          setTimeout(() => { window.location.reload(); }, 3000);
+          this.showRetryNotification(
+            `Synced ${syncResult.synced} items. ${syncResult.failed} failed.`,
+            syncResult.failures
+          );
+        } else if (syncResult.status === 'FAILED') {
+          const pendingCount = await this.getPendingOperations();
+          this.showRetryNotification(
+            `Sync failed: ${pendingCount.length} items could not be synced`,
+            [{ error: syncResult.message }]
+          );
         }
 
         if (navigator.serviceWorker && navigator.serviceWorker.controller) {
@@ -296,18 +305,6 @@ class OfflineSync {
           
 
             if (failedResults.length > 0) {
-              const tx = db.transaction('pending_sync_operations', 'readwrite');
-              const store = tx.objectStore('pending_sync_operations');
-              
-              for (const fail of failedResults) {
-                const record = await store.get(fail.id);
-                if (record) {
-                  record.syncError = fail.message || fail.error || 'Sync failed';
-                  await store.put(record);
-                }
-              }
-              await tx.done;
-
               console.warn(`${failedResults.length} operations failed to sync:`, failedResults);
               return { 
                 status: 'PARTIAL', 
@@ -328,7 +325,24 @@ class OfflineSync {
       } else {
         const errorText = await response.text().catch(() => 'Unknown server error');
         console.error('Sync failed:', response.status, errorText);
-        return { status: 'FAILED', message: `Server error (${response.status}): ${errorText}` };
+        
+        // Clean FAILED error message to be neater
+        let cleanMessage = `Server error (${response.status})`;
+        try {
+          const errorJson = JSON.parse(errorText);
+          if (errorJson.error) {
+            cleanMessage = errorJson.error;
+          } else if (errorJson.message) {
+            cleanMessage = errorJson.message;
+          }
+        } catch (e) {
+          // If not JSON, use the raw text
+          if (errorText) {
+            cleanMessage = errorText;
+          }
+        }
+        
+        return { status: 'FAILED', message: cleanMessage };
       }
     } catch (err) {
       console.error('Sync error:', err);
@@ -336,6 +350,7 @@ class OfflineSync {
     }
   }
 
+// Runs when page comes back online (i.e. from offline to online)
   async handleOnline() {
     console.log('Connection restored');
     this.isOnline = true;
@@ -356,12 +371,10 @@ class OfflineSync {
         break;
       
       case 'PARTIAL':
-        this.showNotification(
-          `Synced ${syncResult.synced} items. ${syncResult.failed} failed due to conflicts. Page will refresh to update status...`, 
-          'warning'
+        this.showRetryNotification(
+          `Synced ${syncResult.synced} items. ${syncResult.failed} failed.`,
+          syncResult.failures
         );
-        // refresh after 3s
-        setTimeout(() => { window.location.reload(); }, 3000);
         break;
         
       case 'NO_DATA':
@@ -369,7 +382,11 @@ class OfflineSync {
         break;
         
       case 'FAILED':
-        this.showNotification(`Sync failed: ${syncResult.message}`, 'error');
+        const pendingCount = await this.getPendingOperations();
+        this.showRetryNotification(
+          `Sync failed: ${pendingCount.length} items could not be synced`,
+          [{ error: syncResult.message }]
+        );
         break;
     }
   }
@@ -382,7 +399,7 @@ class OfflineSync {
     this.showNotification('Connection lost. Saving data locally', 'warning');
   }
 
-  showNotification(message, type = 'info') {
+  showNotification(message, type = 'info', duration = 3000) {
     const notification = document.createElement('div');
     notification.textContent = message;
     notification.style.cssText = `
@@ -394,6 +411,7 @@ class OfflineSync {
       z-index: 9999;
       font-size: 14px;
       animation: slideIn 0.3s ease;
+      max-width: 400px;
     `;
 
     switch (type) {
@@ -416,7 +434,99 @@ class OfflineSync {
     }
 
     document.body.appendChild(notification);
-    setTimeout(() => notification.remove(), 3000);
+    if (duration > 0) {
+      setTimeout(() => notification.remove(), duration);
+    }
+    return notification;
+  }
+
+  showRetryNotification(message, failures) {
+    const notification = document.createElement('div');
+    notification.style.cssText = `
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      padding: 15px 20px;
+      border-radius: 6px;
+      z-index: 9999;
+      font-size: 14px;
+      animation: slideIn 0.3s ease;
+      max-width: 450px;
+      background: #f8d7da;
+      border-left: 4px solid #e63946;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    `;
+
+    const messageDiv = document.createElement('div');
+    messageDiv.style.cssText = 'margin-bottom: 10px; color: #721c24; font-weight: 500;';
+    messageDiv.textContent = message;
+    notification.appendChild(messageDiv);
+
+    // Show failure details
+    if (failures && failures.length > 0) {
+      const detailsDiv = document.createElement('div');
+      detailsDiv.style.cssText = 'font-size: 12px; color: #721c24; margin-bottom: 10px; max-height: 100px; overflow-y: auto;';
+      detailsDiv.innerHTML = '<strong>Failed due to:</strong><br>' + 
+        failures.map(f => `• ${f.error || 'Unknown error'}`).join('<br>');
+      notification.appendChild(detailsDiv);
+    }
+
+    // Button container
+    const buttonContainer = document.createElement('div');
+    buttonContainer.style.cssText = 'display: flex; gap: 8px;';
+
+    // Retry button
+    const retryBtn = document.createElement('button');
+    retryBtn.textContent = 'Retry Sync';
+    retryBtn.style.cssText = `
+      padding: 6px 12px;
+      background: #e63946;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+    `;
+    retryBtn.onclick = async () => {
+      notification.remove();
+      this.showNotification('Retrying sync...', 'info', 2000);
+      const result = await this.syncPending();
+      if (result.status === 'SYNCED') {
+        this.showNotification('Data synced successfully. Refreshing page...', 'success');
+        setTimeout(() => { window.location.reload(); }, 1500);
+      } else if (result.status === 'PARTIAL') {
+        this.showRetryNotification(
+          `Synced ${result.synced} items. ${result.failed} failed.`,
+          result.failures
+        );
+      } else if (result.status === 'FAILED') {
+        const pendingOps = await this.getPendingOperations();
+        this.showRetryNotification(
+          `Sync failed: ${pendingOps.length} items could not be synced`,
+          [{ error: result.message }]
+        );
+      }
+    };
+    buttonContainer.appendChild(retryBtn);
+
+    // Dismiss button
+    const dismissBtn = document.createElement('button');
+    dismissBtn.textContent = 'Dismiss';
+    dismissBtn.style.cssText = `
+      padding: 6px 12px;
+      background: #ccc;
+      color: #666;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 13px;
+    `;
+    dismissBtn.onclick = () => notification.remove();
+    buttonContainer.appendChild(dismissBtn);
+
+    notification.appendChild(buttonContainer);
+    document.body.appendChild(notification);
   }
 
   interceptForms() {

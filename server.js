@@ -36,17 +36,38 @@ app.get('/api/events-list', (req, res) => {
   }
 });
 
+// Test counter for simulating fail-then-success
+let syncAttemptCount = 0;
+
 // API endpoint to sync offline operations from IndexedDB to server
 app.post('/api/sync', (req, res) => {
-  // test snc fail
+  // test sync partial fail
   // return res.json({
-  //   status: 'PARTIAL', // or let your layout naturally return results
+  //   status: 'PARTIAL', 
   //   results: [
   //     { id: 1, success: false, error: 'FOREIGN_KEY_CONSTRAINT', message: 'Fake constraint error for testing' }
   //   ],
-  //   synced: 0,
+  //   synced: 1,
   //   failed: 1
   // });
+
+  // test sync completely fail
+  //  return res.status(500).json({ 
+  //   error: 'Database connection failed - TEST MODE' 
+  // });
+
+  // test for fail -> success retry logic
+  // syncAttemptCount++;
+  
+  // // TEST: Fail first 2 times, then succeed
+  // if (syncAttemptCount <= 2) {
+  //   console.log(`Sync attempt ${syncAttemptCount}: FAILED (test mode)`);
+  //   return res.status(500).json({ 
+  //     error: `Test failure #${syncAttemptCount} - will succeed on retry` 
+  //   });
+  // }
+  
+  console.log(`Sync attempt ${syncAttemptCount}: SUCCESS (test mode)`);
   
   const { operations } = req.body;
   if (!operations || !Array.isArray(operations)) {
